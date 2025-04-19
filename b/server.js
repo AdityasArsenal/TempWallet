@@ -3,6 +3,9 @@ import { ethers } from 'ethers';
 import { v4 as uuidv4 } from 'uuid';
 import { createClient } from '@supabase/supabase-js';
 import cors from 'cors'; // Import the cors middleware
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const app = express();
 
@@ -11,8 +14,8 @@ app.use(cors());
 app.use(express.json());
 
 // Initialize Supabase (replace with your URL and Key)
-const supabaseUrl = 'https://mblhdwjwizxgrbgxkmyx.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1ibGhkd2p3aXp4Z3JiZ3hrbXl4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczODg0MDcxMiwiZXhwIjoyMDU0NDE2NzEyfQ.7JAJFeZ-2BpBtHBB_ACv3BjWo9IU_WOk58QxI1afZ_k';
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Function to generate a random message (nonce)
@@ -31,7 +34,10 @@ app.get('/auth/message', (req, res) => {
 
 // Endpoint to authenticate with MetaMask
 app.post('/auth/login', async (req, res) => {
-    const { metamask_address, message, signature } = req.body; // Removed userName
+    const { metamask_address, message, signature } = req.body;
+
+    console.log("message before verification:", message);
+    console.log("signature before verification:", signature);
 
     if (!metamask_address || !message || !signature) { // Removed userName check
         return res.status(400).json({ error: 'Missing parameters' });
@@ -40,6 +46,8 @@ app.post('/auth/login', async (req, res) => {
     try {
         // 1. Verify the signature
         const signerAddress = ethers.verifyMessage(message, signature);
+        console.log("PublicAddress (the address that signed the message according to the function):", signerAddress);
+        console.log("metamask_address(the address that is logged in):", metamask_address);
 
         if (signerAddress.toLowerCase() !== metamask_address.toLowerCase()) {
             return res.status(401).json({ error: 'Invalid signature' });

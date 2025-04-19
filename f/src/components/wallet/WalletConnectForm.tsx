@@ -47,7 +47,10 @@ export default function WalletConnectForm({
             // 1. Get the message from the backend
             const response = await fetch('http://localhost:3001/auth/message');
             const data = await response.json();
-            const message = data.message;
+            const messagee = data.message;
+
+            const message = "79a1f0b1-174a-4545-b145-248e34f13ed4";
+            console.log("message from backend for the signature:", message);
 
             // 2. Connect to MetaMask and sign the message
             if (window.ethereum) {
@@ -56,6 +59,8 @@ export default function WalletConnectForm({
                 const signer = await provider.getSigner();
                 const metamask_address = await signer.getAddress(); // Get the connected address
                 const signature = await signer.signMessage(message);
+
+                console.log("signature by metamask:", signature);
 
                 // 3. Send data to the backend for login/authentication
                 const loginResponse = await fetch('http://localhost:3001/auth/login', {
