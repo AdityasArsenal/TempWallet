@@ -15,12 +15,13 @@ import {
     VStack,
     useToast,
 } from '@chakra-ui/react';
-import { ethers } from 'ethers'; // Import ethers.js
+import { fetchAuthMessage, connectAndSignMessage, authenticateWithServer } from './utils/walletUtils';
+import { AuthResponse } from './utils/types';
 
 interface WalletConnectFormProps {
     isOpen: boolean;
     onClose: () => void;
-    onConnect: (session_id: string) => Promise<void>; // Modified: onConnect now receives session_id
+    onConnect: (session_id: string) => Promise<void>;
     isConnecting: boolean;
 }
 
@@ -45,43 +46,28 @@ export default function WalletConnectForm({
 
         try {
             // 1. Get the message from the backend
-            const response = await fetch('http://localhost:3001/auth/message');
-            const data = await response.json();
-            const messagee = data.message;
-
-            const message = "79a1f0b1-174a-4545-b145-248e34f13ed4";
+            const message = await fetchAuthMessage();
             console.log("message from backend for the signature:", message);
 
             // 2. Connect to MetaMask and sign the message
             if (window.ethereum) {
-                await window.ethereum.request({ method: 'eth_requestAccounts' }); // Request account access
-                const provider = new ethers.BrowserProvider(window.ethereum);
-                const signer = await provider.getSigner();
-                const metamask_address = await signer.getAddress(); // Get the connected address
-                const signature = await signer.signMessage(message);
-
+                const { metamask_address, signature } = await connectAndSignMessage(message);
                 console.log("signature by metamask:", signature);
 
                 // 3. Send data to the backend for login/authentication
-                const loginResponse = await fetch('http://localhost:3001/auth/login', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        metamask_address,
-                        message,
-                        signature,
-                        userName, // Send the userName to the backend
-                    }),
-                });
+                const loginData = await authenticateWithServer(
+                    metamask_address,
+                    message,
+                    signature,
+                    userName
+                );
 
-                const loginData = await loginResponse.json();
+                if (loginData.session_id) {
+                    // Save username to localStorage
+                    localStorage.setItem('wallet_user_name', userName);
 
-                if (loginResponse.ok) {
                     // Login successful
-                    const session_id = loginData.session_id;
-                    await onConnect(session_id); // Pass the session_id to the parent component
+                    await onConnect(loginData.session_id);
                 } else {
                     // Login failed
                     toast({
