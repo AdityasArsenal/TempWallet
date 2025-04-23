@@ -1,6 +1,7 @@
-'use client'
+// src/components/Hero.tsx
+'use client';
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react';
 import {
   Container,
   Stack,
@@ -9,45 +10,47 @@ import {
   Button,
   Box,
   useColorModeValue,
-} from '@chakra-ui/react'
-import AOS from 'aos'
-import 'aos/dist/aos.css'
+  Table,
+  Thead,
+  Tbody,
+  Tr,
+  Th,
+  Td,
+  useToast,
+} from '@chakra-ui/react';
+import AOS from 'aos';
+import 'aos/dist/aos.css';
+import WelcomeButton from './WelcomeButton';
+import WalletConnectForm from './wallet/WalletConnectForm';
+import { useAccount, useDisconnect } from 'wagmi';
+import { ethers } from 'ethers';
+import { GaslessSmartAccount, getMetaMaskProvider, createSmartAccount, getSmartAccountBalance } from '../utils/gaslessUtils';
+import { addAvalancheNetwork } from '@/utils/addAvalancheNetwork';
 
-// Interactive background component
+
+// InteractiveBackground and GlowingOrbs (unchanged)
 const InteractiveBackground = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    
-    // Set canvas dimensions to match window
     const setCanvasDimensions = () => {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
     };
-    
     setCanvasDimensions();
     window.addEventListener('resize', setCanvasDimensions);
-    
-    // Grid settings
     const gridSpacing = 40;
     const nodeRadius = 1;
     const maxConnections = 3;
     const connectionOpacity = 0.2;
-    
-    // Create grid nodes
     const nodes: { x: number; y: number; vx: number; vy: number }[] = [];
-    
     for (let x = 0; x < canvas.width; x += gridSpacing) {
       for (let y = 0; y < canvas.height; y += gridSpacing) {
-        // Add slight random offset to grid position
         const offsetX = Math.random() * 20 - 10;
         const offsetY = Math.random() * 20 - 10;
-        
         nodes.push({
           x: x + offsetX,
           y: y + offsetY,
@@ -56,115 +59,63 @@ const InteractiveBackground = () => {
         });
       }
     }
-    
-    // Animation loop
     const animate = () => {
-      // Clear canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      
-      // Update and draw nodes
-      nodes.forEach(node => {
-        // Move node slightly
+      nodes.forEach((node) => {
         node.x += node.vx;
         node.y += node.vy;
-        
-        // Change direction randomly
         if (Math.random() < 0.01) {
           node.vx = Math.random() * 0.2 - 0.1;
           node.vy = Math.random() * 0.2 - 0.1;
         }
-        
-        // Boundary check with bounce effect
         if (node.x < 0 || node.x > canvas.width) node.vx *= -1;
         if (node.y < 0 || node.y > canvas.height) node.vy *= -1;
-        
-        // Draw node
         ctx.beginPath();
         ctx.arc(node.x, node.y, nodeRadius, 0, Math.PI * 2);
         ctx.fillStyle = 'rgba(134, 147, 190, 0.6)';
         ctx.fill();
       });
-      
-      // Draw connections between close nodes
       nodes.forEach((node, i) => {
         let connectionsCount = 0;
-        
         for (let j = i + 1; j < nodes.length; j++) {
           if (connectionsCount >= maxConnections) break;
-          
           const otherNode = nodes[j];
           const dx = node.x - otherNode.x;
           const dy = node.y - otherNode.y;
           const distance = Math.sqrt(dx * dx + dy * dy);
-          
-          // If nodes are close enough, draw a line between them
           if (distance < gridSpacing * 1.5) {
-            // Calculate opacity based on distance
-            const opacity = 1 - (distance / (gridSpacing * 1.5));
-            
+            const opacity = 1 - distance / (gridSpacing * 1.5);
             ctx.beginPath();
             ctx.moveTo(node.x, node.y);
             ctx.lineTo(otherNode.x, otherNode.y);
             ctx.strokeStyle = `rgba(134, 147, 190, ${opacity * connectionOpacity})`;
             ctx.lineWidth = 0.5;
             ctx.stroke();
-            
             connectionsCount++;
           }
         }
       });
-      
       requestAnimationFrame(animate);
     };
-    
     animate();
-    
-    // Clean up
-    return () => {
-      window.removeEventListener('resize', setCanvasDimensions);
-    };
+    return () => window.removeEventListener('resize', setCanvasDimensions);
   }, []);
-  
   return (
-    <Box
-      position="absolute"
-      top={0}
-      left={0}
-      width="100%"
-      height="100%"
-      zIndex={0}
-      overflow="hidden"
-    >
-      <canvas 
-        ref={canvasRef} 
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
-        }}
-      />
+    <Box position="absolute" top={0} left={0} width="100%" height="100%" zIndex={0} overflow="hidden">
+      <canvas ref={canvasRef} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }} />
     </Box>
   );
 };
 
-// Glowing orb animation effect
 const GlowingOrbs = () => {
   const orbRef = useRef<HTMLDivElement>(null);
-  
   useEffect(() => {
     const orbContainer = orbRef.current;
     if (!orbContainer) return;
-    
-    // Create orbs
     const orbCount = 6;
-    
     for (let i = 0; i < orbCount; i++) {
       const orb = document.createElement('div');
       const size = Math.random() * 200 + 100;
-      
-      // Style the orb
       Object.assign(orb.style, {
         position: 'absolute',
         width: `${size}px`,
@@ -179,11 +130,8 @@ const GlowingOrbs = () => {
         zIndex: '-1',
         pointerEvents: 'none',
       });
-      
-      // Animate position
       const animateDuration = Math.random() * 100 + 60;
       const animateDelay = Math.random() * -100;
-      
       const keyframes = `
         @keyframes float-${i} {
           0% { transform: translate(-50%, -50%) translate(0, 0); }
@@ -193,58 +141,109 @@ const GlowingOrbs = () => {
           100% { transform: translate(-50%, -50%) translate(0, 0); }
         }
       `;
-      
-      // Create and append style
       const style = document.createElement('style');
       style.appendChild(document.createTextNode(keyframes));
       document.head.appendChild(style);
-      
-      // Apply animation
       orb.style.animation = `float-${i} ${animateDuration}s infinite ease-in-out ${animateDelay}s`;
-      
-      // Add to container
       orbContainer.appendChild(orb);
     }
-    
-    // Clean up
     return () => {
       while (orbContainer.firstChild) {
         orbContainer.removeChild(orbContainer.firstChild);
       }
     };
   }, []);
-  
   return (
-    <Box
-      ref={orbRef}
-      position="absolute"
-      top={0}
-      left={0}
-      width="100%"
-      height="100%"
-      zIndex={0}
-      overflow="hidden"
-    />
+    <Box position="absolute" top={0} left={0} width="100%" height="100%" zIndex={0} overflow="hidden" ref={orbRef} />
   );
 };
 
+// Hero component
 export default function Hero() {
-  useEffect(() => {
-    AOS.init({
-      duration: 1000,
-      once: true,
-    })
-  }, [])
-
+  const [user, setUser] = useState<{ name: string; address?: string; sessionId: string } | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [smartAccounts, setSmartAccounts] = useState<
+    { address: string; balance: string; client: GaslessSmartAccount }[]
+  >([]);
+  const { address, isConnected } = useAccount();
+  const { disconnect } = useDisconnect();
+  const toast = useToast();
   const glowColor = useColorModeValue('blue.200', 'blue.400');
+
+  useEffect(() => {
+    AOS.init({ duration: 1000, once: true });
+    const savedName = localStorage.getItem('wallet_user_name');
+    if (savedName) {
+      setUser({ name: savedName, sessionId: `session-${Date.now()}` });
+    }
+    addAvalancheNetwork().catch((error: any) => {
+      console.error('Failed to add Avalanche network:', error);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!isConnected) {
+      setSmartAccounts([]);
+      setUser(null);
+      localStorage.removeItem('wallet_user_name');
+    }
+  }, [isConnected]);
+
+  const handleConnect = async (userData: { name: string; address?: string; sessionId: string }) => {
+    setIsConnecting(true);
+    setUser(userData);
+    localStorage.setItem('wallet_user_name', userData.name);
+    setIsConnecting(false);
+  };
+
+  const handleCreateSmartAccount = async () => {
+    if (!isConnected || !address) {
+      toast({
+        title: 'Wallet Not Connected',
+        description: 'Please connect your MetaMask wallet first.',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    try {
+      const provider = await getMetaMaskProvider();
+      const signer = await provider.getSigner();
+      const { client, address: smartAccountAddress } = await createSmartAccount(signer);
+      const balance = await getSmartAccountBalance(smartAccountAddress);
+
+      setSmartAccounts((prev) => [
+        ...prev,
+        { address: smartAccountAddress, balance, client },
+      ]);
+
+      toast({
+        title: 'Smart Account Created',
+        description: `Address: ${smartAccountAddress} (Gasless mode enabled)`,
+        status: 'success',
+        duration: 5000,
+        isClosable: true,
+      });
+    } catch (error) {
+      console.error('Error creating smart account:', error);
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to create smart account',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    }
+  };
 
   return (
     <Box position="relative" minHeight="100vh" bg="gray.900">
-      {/* Background elements */}
+      <WelcomeButton name={user?.name || null} />
       <InteractiveBackground />
       <GlowingOrbs />
-      
-      {/* Content */}
       <Container maxW={'5xl'} position="relative" zIndex={1}>
         <Stack
           textAlign={'center'}
@@ -265,21 +264,11 @@ export default function Hero() {
               </Text>
             </Heading>
           </Box>
-          <Text
-            color={'gray.300'}
-            maxW={'3xl'}
-            data-aos="fade-up"
-            data-aos-delay="200"
-          >
-            Tempwallet is a secure blockchain platform that revolutionizes digital transactions with decentralized technology. 
+          <Text color={'gray.300'} maxW={'3xl'} data-aos="fade-up" data-aos-delay="200">
+            Tempwallet is a secure blockchain platform that revolutionizes digital transactions with decentralized technology.
             Our user-friendly interface enables seamless wallet creation and management while ensuring transparency and fraud protection.
           </Text>
-          <Stack
-            spacing={6}
-            direction={'row'}
-            data-aos="fade-up"
-            data-aos-delay="400"
-          >
+          <Stack spacing={6} direction={'column'} data-aos="fade-up" data-aos-delay="400">
             <Button
               rounded={'full'}
               px={6}
@@ -287,16 +276,73 @@ export default function Hero() {
               bgGradient="linear(to-r, blue.400, purple.500)"
               color="white"
               _hover={{
-                bgGradient: "linear(to-r, blue.500, purple.600)",
+                bgGradient: 'linear(to-r, blue.500, purple.600)',
                 boxShadow: `0 0 20px ${glowColor}`,
               }}
               transition="all 0.3s ease"
+              onClick={() => setIsModalOpen(true)}
+              isDisabled={isConnected}
             >
-              Get Started
+              {isConnected ? 'Wallet Connected' : 'Connect Wallet'}
+            </Button>
+            <Button
+              rounded={'full'}
+              px={6}
+              size={'lg'}
+              bgGradient="linear(to-r, purple.400, pink.500)"
+              color="white"
+              _hover={{
+                bgGradient: 'linear(to-r, purple.500, pink.600)',
+                boxShadow: `0 0 20px ${glowColor}`,
+              }}
+              transition="all 0.3s ease"
+              onClick={handleCreateSmartAccount}
+              isDisabled={!isConnected}
+            >
+              Create Smart Account
             </Button>
           </Stack>
+          {smartAccounts.length > 0 && (
+            <Box
+              mt={8}
+              p={{ base: 4, md: 6 }}
+              bg="gray.800"
+              borderRadius="lg"
+              boxShadow="0 0 20px rgba(0, 0, 0, 0.5)"
+              maxW={{ base: 'full', md: '3xl' }}
+              w="100%"
+              data-aos="fade-up"
+              data-aos-delay="600"
+            >
+              <Heading size="md" mb={4} color="white">
+                Smart Accounts
+              </Heading>
+              <Table variant="simple" colorScheme="whiteAlpha">
+                <Thead>
+                  <Tr>
+                    <Th color="gray.400">Wallet Address</Th>
+                    <Th color="gray.400">Balance (AVAX)</Th>
+                  </Tr>
+                </Thead>
+                <Tbody>
+                  {smartAccounts.map((account, index) => (
+                    <Tr key={index}>
+                      <Td color="gray.300">{account.address}</Td>
+                      <Td color="gray.300">{account.balance}</Td>
+                    </Tr>
+                  ))}
+                </Tbody>
+              </Table>
+            </Box>
+          )}
+          <WalletConnectForm
+            isOpen={isModalOpen}
+            onClose={() => setIsModalOpen(false)}
+            onConnect={handleConnect}
+            isConnecting={isConnecting}
+          />
         </Stack>
       </Container>
     </Box>
-  )
+  );
 }
