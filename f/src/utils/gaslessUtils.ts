@@ -78,7 +78,7 @@ export const createSmartAccount = async (signer: ethers.Signer): Promise<{
     const smartAccount = await createSmartAccountClient({
       signer: viemClient,
       bundlerUrl: `https://bundler.0xgasless.com/43114`, // Verify with 0xGasless
-      paymasterUrl: `https://paymaster.0xgasless.com/43114?apiKey=${apiKey}`, // Include API key in URL
+      paymasterUrl: `https://paymaster.0xgasless.com/v1/43114/rpc/${apiKey}`, // Include API key in URL
     });
 
     const smartAccountAddress = await smartAccount.getAccountAddress();
