@@ -17,16 +17,29 @@ import {
   Th,
   Td,
   useToast,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalCloseButton,
+  ModalBody,
 } from '@chakra-ui/react';
 import AOS from 'aos';
 import 'aos/dist/aos.css';
-import WelcomeButton from './WelcomeButton';
-import WalletConnectForm from './wallet/WalletConnectForm';
 import { useAccount, useDisconnect } from 'wagmi';
 import { ethers } from 'ethers';
-import { GaslessSmartAccount, getMetaMaskProvider, createSmartAccount, getSmartAccountBalance } from '../utils/gaslessUtils';
-import { addAvalancheNetwork } from '@/utils/addAvalancheNetwork';
+import { addAvalancheNetwork } from '../utils/addNetwork';
+import { 
+  createSmartAccount, 
+  getMetaMaskProvider, 
+  getSmartAccountBalance 
+} from '../utils/smartAccountUtils';
 
+// Define the type for the smart accounts
+interface SmartAccountInfo {
+  address: string;
+  balance: string;
+}
 
 // InteractiveBackground and GlowingOrbs (unchanged)
 const InteractiveBackground = () => {
@@ -158,18 +171,130 @@ const GlowingOrbs = () => {
   );
 };
 
+// Simple WalletConnectForm component for when references are removed
+const WalletConnectForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
+  return (
+    <Modal isOpen={isOpen} onClose={onClose}>
+      <ModalOverlay />
+      <ModalContent bg="gray.800" color="white">
+        <ModalHeader>Connect Wallet</ModalHeader>
+        <ModalCloseButton />
+        <ModalBody pb={6}>
+          <Text>Please connect your MetaMask wallet to continue.</Text>
+          <Button 
+            mt={4} 
+            colorScheme="blue" 
+            onClick={onClose}
+          >
+            Close
+          </Button>
+        </ModalBody>
+      </ModalContent>
+    </Modal>
+  );
+};
+
+// Simple WelcomeButton component
+const WelcomeButton = ({ name }: { name: string | null }) => {
+  if (!name) return null;
+  
+  return (
+    <Box 
+      position="fixed" 
+      top={4} 
+      right={4} 
+      zIndex={10} 
+      bg="blue.500" 
+      px={4} 
+      py={2} 
+      borderRadius="md"
+      color="white"
+    >
+      Welcome, {name}
+    </Box>
+  );
+};
+
 // Hero component
-export default function Hero() {
-  const [user, setUser] = useState<{ name: string; address?: string; sessionId: string } | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [smartAccounts, setSmartAccounts] = useState<
-    { address: string; balance: string; client: GaslessSmartAccount }[]
-  >([]);
-  const { address, isConnected } = useAccount();
-  const { disconnect } = useDisconnect();
+const Hero = () => {
   const toast = useToast();
-  const glowColor = useColorModeValue('blue.200', 'blue.400');
+  const [smartAccounts, setSmartAccounts] = useState<SmartAccountInfo[]>([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [user, setUser] = useState<{ name: string; sessionId: string } | null>(null);
+  const [isConnecting, setIsConnecting] = useState(false);
+  
+  // Use wagmi hooks
+  const { isConnected } = useAccount();
+  const { disconnect } = useDisconnect();
+
+  const handleCreateSmartAccount = async () => {
+    try {
+      const provider = await getMetaMaskProvider();
+      const signer = provider.getSigner();
+      
+      const { client, address } = await createSmartAccount(signer);
+      
+      // Fetch the balance of the newly created smart account
+      const balance = await getSmartAccountBalance(address);
+      
+      // Add the smart account to the list
+      setSmartAccounts(prev => [...prev, { address, balance }]);
+      
+      toast({
+        title: 'Smart Account Created',
+        description: `Address: ${address}`,
+        status: 'success',
+        duration: 5000,
+        isClosable: true,
+      });
+    } catch (error: any) {
+      console.error('Smart account creation error:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to create smart account',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    }
+  };
+
+  const handleConnect = async () => {
+    try {
+      setIsConnecting(true);
+      await getMetaMaskProvider();
+      setIsModalOpen(false);
+      
+      // If there's a name in local storage, use it
+      const savedName = localStorage.getItem('wallet_user_name');
+      if (savedName) {
+        setUser({ name: savedName, sessionId: `session-${Date.now()}` });
+      } else {
+        // Default name if none exists
+        const defaultName = "User";
+        localStorage.setItem('wallet_user_name', defaultName);
+        setUser({ name: defaultName, sessionId: `session-${Date.now()}` });
+      }
+      
+      toast({
+        title: 'Wallet Connected',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (error: any) {
+      console.error('Wallet connection error:', error);
+      toast({
+        title: 'Connection Error',
+        description: error.message || 'Failed to connect wallet',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setIsConnecting(false);
+    }
+  };
 
   useEffect(() => {
     AOS.init({ duration: 1000, once: true });
@@ -177,67 +302,22 @@ export default function Hero() {
     if (savedName) {
       setUser({ name: savedName, sessionId: `session-${Date.now()}` });
     }
-    addAvalancheNetwork().catch((error: any) => {
-      console.error('Failed to add Avalanche network:', error);
+    
+    // Try to add Avalanche C-Chain network to MetaMask
+    addAvalancheNetwork().catch((error) => {
+      console.error('Failed to add Avalanche C-Chain network:', error);
+      toast({
+        title: 'Network Error',
+        description: error.message || 'Failed to add Avalanche C-Chain network',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
     });
-  }, []);
+  }, [toast]);
 
-  useEffect(() => {
-    if (!isConnected) {
-      setSmartAccounts([]);
-      setUser(null);
-      localStorage.removeItem('wallet_user_name');
-    }
-  }, [isConnected]);
-
-  const handleConnect = async (userData: { name: string; address?: string; sessionId: string }) => {
-    setIsConnecting(true);
-    setUser(userData);
-    localStorage.setItem('wallet_user_name', userData.name);
-    setIsConnecting(false);
-  };
-
-  const handleCreateSmartAccount = async () => {
-    if (!isConnected || !address) {
-      toast({
-        title: 'Wallet Not Connected',
-        description: 'Please connect your MetaMask wallet first.',
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-      });
-      return;
-    }
-
-    try {
-      const provider = await getMetaMaskProvider();
-      const signer = await provider.getSigner();
-      const { client, address: smartAccountAddress } = await createSmartAccount(signer);
-      const balance = await getSmartAccountBalance(smartAccountAddress);
-
-      setSmartAccounts((prev) => [
-        ...prev,
-        { address: smartAccountAddress, balance, client },
-      ]);
-
-      toast({
-        title: 'Smart Account Created',
-        description: `Address: ${smartAccountAddress} (Gasless mode enabled)`,
-        status: 'success',
-        duration: 5000,
-        isClosable: true,
-      });
-    } catch (error) {
-      console.error('Error creating smart account:', error);
-      toast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to create smart account',
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-      });
-    }
-  };
+  // Define glowColor for button hover effect
+  const glowColor = useColorModeValue('rgba(0, 0, 255, 0.6)', 'rgba(0, 0, 255, 0.6)');
 
   return (
     <Box position="relative" minHeight="100vh" bg="gray.900">
@@ -338,11 +418,11 @@ export default function Hero() {
           <WalletConnectForm
             isOpen={isModalOpen}
             onClose={() => setIsModalOpen(false)}
-            onConnect={handleConnect}
-            isConnecting={isConnecting}
           />
         </Stack>
       </Container>
     </Box>
   );
-}
+};
+
+export default Hero;
