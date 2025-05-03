@@ -2,8 +2,8 @@
 
 import { Box } from '@chakra-ui/react'
 import Navbar from '@/components/Navbar'
-import Hero from '@/components/Hero'
 import Partners from '@/components/Partners'
+import Hero from '@/components/Hero'
 
 export default function Home() {
   return (
